@@ -20,12 +20,12 @@
 
     console.log('Running Tumblr Comics UserScript');
 
-    // TODO: preloading images
     // TODO: preload next/prev page
     // TODO: add icon to tags
     // TODO: jump to?
     // TODO: Save/Load to URL hash
     // TODO: Clean up duplicated code
+    // TODO: Load pages as AJAX instead of iframe
 
     const imageSize = 1280;
     const preloadImages = true;
@@ -119,7 +119,7 @@
             return deferred.promise();
         },
         getText: function() {
-            var deferred = $. Deferred();
+            var deferred = $.Deferred();
 
             deferred.resolve(this.container.children('p').wrapAll('<div/>').html());
 
@@ -144,34 +144,55 @@
             if (this.current > 0) {
                 --this.current;
                 this.update();
+                this.loadPage(this.getPageNumber() - 1);
             }
         },
         next: function() {
             ++this.current;
             this.update();
+            this.loadPage(this.getPageNumber() + 1);
         },
         update: function() {
             if (this.entries[this.current]) {
                 this.overlay.showEntry(this.entries[this.current]);
             } else {
                 var self = this;
-                var page = this.getPage();
+                var pageNumber = this.getPageNumber();
 
-                if (this.pageStates[page] === undefined) {
-                    this.pageStates[page] = 'loading';
-                    $.when(this.pageLoader.load(page)).then(function(entries) {
-                        var offset = (page - 1) * self.perPage;
-
-                        for (let i = 0; i < entries.length; ++i) {
-                            self.entries[offset + i] = entries[i];
-                        }
-
-                        self.overlay.showEntry(self.entries[self.current]);
-                    });
-                }
+                $.when(this.loadPage(pageNumber)).then(function() {
+                    self.overlay.showEntry(self.entries[self.current]);
+                });
             }
         },
-        getPage: function(entryNumber) {
+        loadPage: function(pageNumber) {
+            var self = this;
+            var deferred = $.Deferred();
+
+            if (pageNumber < 1) {
+                return true;
+            }
+
+            if (this.pageStates[pageNumber] === undefined) {
+                this.pageStates[pageNumber] = deferred.promise();
+
+                $.when(this.pageLoader.load(pageNumber)).then(function(entries) {
+                    var offset = (pageNumber - 1) * self.perPage;
+
+                    for (let i = 0; i < entries.length; ++i) {
+                        self.entries[offset + i] = entries[i];
+                    }
+
+                    deferred.resolve();
+                });
+            } else {
+                $.when(this.pageStates[pageNumber]).then(function() {
+                    deferred.resolve();
+                });
+            }
+
+            return deferred.promise();
+        },
+        getPageNumber: function(entryNumber) {
             if (entryNumber === undefined) {
                 entryNumber = this.current;
             }
